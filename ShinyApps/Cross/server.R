@@ -1,6 +1,9 @@
 library(lubridate)
 library(dplyr)
 library(ggplot2)
+library(tidyr)
+library(magrittr)
+library(DT)
 
 library(shiny)
 gar_set_client(scopes = c("https://www.googleapis.com/auth/analytics.readonly"))
@@ -11,6 +14,7 @@ shinyServer(function(input, output,session) {
   library(googleAnalyticsR)
   organic_segment <- "gaid::-5"   
   seg_obj <- segment_ga4("Organic",segment_id = organic_segment)
+  paid_obj <- segment_ga4("Paid",segment_id = "gaid::-4")
   ga_id <- 1834906
   
   baseline <- reactive({boost <- with_shiny(google_analytics,ga_id,
@@ -121,8 +125,19 @@ shinyServer(function(input, output,session) {
                         segments = seg_obj,
                         metrics=c("sessions","bounceRate"),
                         shiny_access_token = auth())
-  pages <- arrange(pages,desc(sessions)) %>% top_n(10,sessions) %>% rename('Bounce Rate'=bounceRate, Sessions = sessions)
+    pages <- arrange(pages,desc(sessions)) %>% top_n(10,sessions) %>% rename('Bounce Rate'=bounceRate, Sessions = sessions,'Landing Page Path'=landingPagePath) %>% select(1,3,4)
   })
+  
+  ###### AdWords Goal Completions
+  adwords <- reactive({
+    paidconverts <- with_shiny(google_analytics,ga_id,
+                               date_range=c(input$date[1],input$date[2]),
+                               dimensions=c("date"),
+                               metrics=c("goalCompletionsAll"),
+                               segments=paid_obj,
+                               shiny_access_token = auth())
+  })
+  
   
   output$line <- renderPlot({
     
@@ -141,13 +156,38 @@ shinyServer(function(input, output,session) {
     {crossings <- crossings}
     
     if(1 %in% input$lookback)
-    {ggplot(crossings,aes(x=date,y=sessions)) + geom_line(size=1.5) + xlim(min(crossings$date),max(crossings$date)) +
-        theme_classic() + geom_line(data=crossers,aes(x=crossings$date,y=crossers$sessions),color="red",size=1.5) + expand_limits(y=0)}
+    {ggplot(crossings,aes(x=date,y=sessions)) + 
+        geom_line(size=1.5) + 
+        xlim(min(crossings$date),max(crossings$date)) +
+        theme_classic() + 
+        geom_line(data=crossers,aes(x=crossings$date,y=crossers$sessions),color="red",size=1.5) + 
+        theme(axis.line.y = element_blank(),
+              panel.grid.major.y = element_line(color="gray"),
+              axis.ticks.y = element_blank(),
+              axis.text = element_text(size=12)) + 
+        labs(y=NULL,x=NULL) +
+        expand_limits(y=0)}
     else if(2 %in% input$lookback)
-    {ggplot(crossings,aes(x=date,y=sessions)) + geom_line(size=1.5) + xlim(min(crossings$date),max(crossings$date)) +
-        theme_classic() + geom_line(data=crossmen,aes(x=crossings$date,y=crossmen$sessions),color="blue",size=1.5) + expand_limits(y=0)}
-    else {ggplot(crossings,aes(x=date,y=sessions)) + geom_line(size=1.5) + xlim(min(crossings$date),max(crossings$date)) +
-        theme_classic() + expand_limits(y=0)}
+    {ggplot(crossings,aes(x=date,y=sessions)) + 
+        geom_line(size=1.5) + 
+        xlim(min(crossings$date),max(crossings$date)) +
+        theme_classic() + 
+        geom_line(data=crossmen,aes(x=crossings$date,y=crossmen$sessions),color="blue",size=1.5) + 
+        theme(axis.line.y = element_blank(),
+              panel.grid.major.y = element_line(color="gray"),
+              axis.ticks.y = element_blank(),
+              axis.text = element_text(size=12)) +
+        labs(y=NULL,x=NULL) +
+        expand_limits(y=0)}
+    else {ggplot(crossings,aes(x=date,y=sessions)) + 
+        geom_line(size=1.5) + xlim(min(crossings$date),max(crossings$date)) +
+        theme_classic() + 
+        theme(axis.line.y = element_blank(),
+              panel.grid.major.y = element_line(color="gray"),
+              axis.ticks.y = element_blank(),
+              axis.text = element_text(size=12)) +
+        labs(y=NULL,x=NULL) +
+        expand_limits(y=0)}
     ########Value Boxes
   })
   output$sessions <- renderValueBox({
@@ -161,6 +201,11 @@ shinyServer(function(input, output,session) {
   output$dollars <- renderValueBox({
     completions <- goalline()
     valueBox(round(sum(completions$adCost),digits = 2),"AdWords Cost",icon=icon("filter"))
+  })
+  
+  output$paidgoals <- renderValueBox({
+    ads <- adwords()
+    valueBox(sum(ads$goalCompletionsAll),"AdWords Goal Completions",icon=icon("filter"))
   })
   # output$rate <- renderValueBox({
   #    num <- baseline()
@@ -180,111 +225,125 @@ shinyServer(function(input, output,session) {
     {completes <- completes}
     
     if(1 %in% input$lookback)
-    {ggplot(completes,aes(x=date,y=goalCompletionsAll)) + geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
-        theme_classic() + geom_line(data=lastcompletes,aes(x=completes$date,y=lastcompletes$goalCompletionsAll),color="red",size=1.5)+ expand_limits(y=0)}
+    {ggplot(completes,aes(x=date,y=goalCompletionsAll)) + 
+        geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
+        theme_classic() + 
+        geom_line(data=lastcompletes,aes(x=completes$date,y=lastcompletes$goalCompletionsAll),color="red",size=1.5)+ 
+        theme(axis.line.y = element_blank(),
+              panel.grid.major.y = element_line(color="gray"),
+              axis.ticks.y = element_blank(),
+              axis.text = element_text(size=12)) +
+        expand_limits(y=0)}
     else if(2 %in% input$lookback)
-    {ggplot(completes,aes(x=date,y=goalCompletionsAll)) + geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
-        theme_classic() + geom_line(data=yearcompletes,aes(x=completes$date,y=yearcompletes$goalCompletionsAll),color="blue",size=1.5) + expand_limits(y=0)}
-    else {ggplot(completes,aes(x=date,y=goalCompletionsAll)) + geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
-        theme_classic()+ expand_limits(y=0)}
+    {ggplot(completes,aes(x=date,y=goalCompletionsAll)) + 
+        geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
+        theme_classic() + 
+        geom_line(data=yearcompletes,aes(x=completes$date,y=yearcompletes$goalCompletionsAll),color="blue",size=1.5) + 
+        theme(axis.line.y = element_blank(),
+              panel.grid.major.y = element_line(color="gray"),
+              axis.ticks.y = element_blank(),
+              axis.text = element_text(size=12)) +
+        expand_limits(y=0)}
+    else {ggplot(completes,aes(x=date,y=goalCompletionsAll)) + 
+        geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
+        theme_classic()+ 
+        theme(axis.line.y = element_blank(),
+              panel.grid.major.y = element_line(color="gray"),
+              axis.ticks.y = element_blank(),
+              axis.text = element_text(size=12)) +
+        expand_limits(y=0)}
   })
   ###Goals Breakdown
-  goal1 <- reactive({
-    goal1 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal1Completions"),
-                        shiny_access_token = auth())
-    goal1 <- mutate(goal1,Completions=sum(goal1Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "Vendor Evaluation")
-  })
-  goal2 <- reactive({
-    goal2 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal2Completions"),
-                        shiny_access_token = auth())
-    goal2 <- mutate(goal2,Completions=sum(goal2Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "General Contact Form")
-  })
-  goal3 <- reactive({
-    goal3 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal3Completions"),
-                        shiny_access_token = auth())
-    goal3 <- mutate(goal3,Completions=sum(goal3Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "Consultation Request")
-  })
-  goal4 <- reactive({
-    goal4 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal4Completions"),
-                        shiny_access_token = auth())
-    goal4 <- mutate(goal4,Completions=sum(goal4Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "Newsletter Subscription")
-  })
-  goal5 <- reactive({
-    goal5 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal5Completions"),
-                        shiny_access_token = auth())
-    goal5 <- mutate(goal5,Completions=sum(goal5Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "Partner Request")
-  })
-  goal6 <- reactive({
-    goal6 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal6Completions"),
-                        shiny_access_token = auth())
-    goal6 <- mutate(goal6,Completions=sum(goal6Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "Customer Journey Download")
-  })
-  goal7 <- reactive({
-    goal7 <- with_shiny(google_analytics,ga_id,
-                        date_range=c(input$date[1],input$date[2]),
-                        dimensions=c("date"),
-                        metrics=c("goal7Completions"),
-                        shiny_access_token = auth())
-    goal7 <- mutate(goal7,Completions=sum(goal7Completions)) %>% summarize(Completions=max(Completions)) %>% mutate(Goal = "Myth Content Offer")
-  })
+  
   really <- reactive({
-    goal1 <- goal1()
-    goal2 <- goal2()
-    goal3 <- goal3()
-    goal4 <- goal4()
-    goal5 <- goal5()
-    goal6 <- goal6()
-    goal7 <- goal7()
-    reals <-bind_rows(goal1,goal2) %>% bind_rows(goal3) %>% bind_rows(goal4) %>% bind_rows(goal5) %>% bind_rows(goal6) %>% bind_rows(goal7)
+    
+    vro <- with_shiny(google_analytics,ga_id,
+                      date_range = c(input$date[1],input$date[2]),
+                      dimensions = "date",
+                      metrics = c("goal1Completions",
+                                  "goal2Completions",
+                                  "goal3Completions",
+                                  "goal4Completions",
+                                  "goal5Completions",
+                                  "goal6Completions",
+                                  "goal7Completions"),
+                      shiny_access_token=auth())
+    vro <- vro %>% mutate(goal1Completions = sum(goal1Completions)) %>%
+      mutate(goal2Completions = sum(goal2Completions)) %>%
+      mutate(goal3Completions = sum(goal3Completions)) %>%
+      mutate(goal4Completions = sum(goal4Completions)) %>%
+      mutate(goal5Completions = sum(goal5Completions)) %>%
+      mutate(goal6Completions = sum(goal6Completions)) %>%
+      mutate(goal7Completions = sum(goal7Completions))
+    vro <- vro[1,]
+    vro <- gather(vro,goaltype,Completions,2:8)
+    Goal <- c("Vendor Evaluation",
+              "General Contact Form",
+              "Consultation Request",
+              "Newsletter Subscription",
+              "Partner Request",
+              "Customer Journey Download",
+              "Myth Content Offer")
+    vro <- cbind(vro,Goal)
+    vro <-vro[,3:4]
   })
   
   
   output$goalbreak <- renderPlot({
     reality <- really()
-    ggplot(reality,aes(x=Goal,y=Completions)) + geom_col(width=.65,fill="blue") + theme_classic()+ coord_flip()+theme(axis.text.y = element_text(size=10)) + labs(title="")
+    ggplot(reality,aes(x=Goal,y=Completions)) + 
+      geom_col(width=.65,fill="blue") + 
+      theme_classic()+ 
+      coord_flip()+
+      theme(axis.text = element_text(size=12)) + 
+      labs(title="")
   })
   
-  output$table <- renderTable({
-    lands <- landing()
-    lands
+  output$table <- DT::renderDT(landing(),server = TRUE,selection=list(target='row',selected=1,mode='single'),options=list(pageLength=7,lengthMenu=c(7,15)))
+  
+  pagewisetrends <- reactive({
+    pages <- with_shiny(google_analytics,ga_id,
+                              date_range=c(input$date[1],input$date[2]),
+                              dimensions=c("landingPagePath"),
+                              segments = seg_obj,
+                              metrics=c("sessions","bounceRate"),
+                              shiny_access_token = auth())
+    pages <- arrange(pages,desc(sessions)) %>% top_n(10,sessions) %>% rename('Bounce Rate'=bounceRate, Sessions = sessions)
   })
-  output$rate <- renderPlot({
-    completes <- goalline()
-    lastcompletes <- changegoals()
-    yearcompletes <- pastgoals()
-    
-    if(1 %in% input$lookback)
-    {completes <- completes[1:length(lastcompletes$date),]}
-    else if(2 %in% input$lookback)
-    {completes <- completes[1:length(yearcompletes$date),]}
-    else
-    {completes <- completes}
-    
-    if(1 %in% input$lookback)
-    {ggplot(completes,aes(x=date,y=costPerConversion)) + geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
-        theme_classic() + geom_line(data=lastcompletes,aes(x=completes$date,y=lastcompletes$costPerConversion),color="red",size=1.5) + expand_limits(y=0)}
-    else if(2 %in% input$lookback)
-    {ggplot(completes,aes(x=date,y=costPerConversion)) + geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
-        theme_classic() + geom_line(data=yearcompletes,aes(x=completes$date,y=yearcompletes$costPerConversion),color="blue",size=1.5) + expand_limits(y=0)}
-    else {ggplot(completes,aes(x=date,y=costPerConversion)) + geom_line(size=1.5) + xlim(min(completes$date),max(completes$date)) +
-        theme_classic()+ expand_limits(y=0)}
+    top_pages <- reactive({
+      
+      #top <- pages$landingPagePath
+    pages <- dim_filter("landingPagePath",operator = "IN_LIST",expressions = pagewisetrends()$landingPagePath[input$table_rows_selected])
+    })
+   top_landing <- reactive({
+     #tops <- top_pages()
+     page_filter <- filter_clause_ga4(list( top_pages()))
+   })
+   final <- reactive({
+    top_pages <- with_shiny(google_analytics,ga_id,
+                                  date_range=c(input$date[1],input$date[2]),
+                                  dimensions=c("week","landingPagePath"),
+                                  segments = seg_obj,
+                                  metrics=c("sessions","bounceRate"),
+                                  dim_filters = top_landing(),
+                                  shiny_access_token=auth())
+    top_pages$landingPagePath %<>% as.factor()
+    top_pages$week <- top_pages$week %>% as.numeric()
+    top_pages
   })
+  
+  output$pagewise <- renderPlot({
+    pagetrends <- final()
+    ggplot(data = pagetrends,aes(x=week,y=sessions,color=landingPagePath)) + 
+      geom_line(size=2) + 
+      theme_classic() +
+      theme(legend.position = "bottom",
+            axis.line.y = element_blank(),
+            panel.grid.major.y = element_line(color="gray"),
+            axis.ticks.y = element_blank(),
+            axis.text = element_text(size=12)) + 
+      labs(y=NULL) +
+      expand_limits(y=0)
+  })
+  
 })
