@@ -1,0 +1,45 @@
+.skin-red .main-header .navbar {
+  background-color:#74b725;
+}
+.skin-red .main-header .logo:hover {
+  background-color:#547717;
+}
+
+
+.skin-red .main-header .logo {
+  background-color:#547717;
+}
+.skin-red .main-header .navbar .sidebar-toggle:hover {
+    background-color: #547717; 
+}
+.skin-red .sidebar-menu>li.active>a, .skin-red .sidebar-menu>li:hover>a {
+    border-left-color: #547717;
+}
+.box.box-solid.box-danger {
+    border: 0; 
+}
+.box.box-solid.box-danger>.box-header {
+    color: #fff;
+    background: #74b725;
+    background-color: #74b725;
+}
+.main-header {
+    position: fixed;
+    width: 100%;
+}
+
+.main-sidebar {
+    position: fixed;
+}
+
+.content {
+    padding-top: 65px;
+}
+.box-header {
+    border-top-right-radius: 3px;
+    border-top-left-radius: 3px;
+}
+.box-danger {
+    border-top-right-radius: 3px;
+    border-top-left-radius: 3px;
+}
